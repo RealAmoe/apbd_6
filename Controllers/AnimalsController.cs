@@ -1,72 +1,118 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 using Tutorial5.Models;
-using Tutorial5.Models.DTOs;
+using Microsoft.Data.SqlClient;
 
-namespace Tutorial5.Controllers;
 
-[ApiController]
-// [Route("api/animals")]
-[Route("api/[controller]")]
-public class AnimalsController : ControllerBase
+namespace Tutorial5.Controllers
 {
-    private readonly IConfiguration _configuration;
-    public AnimalsController(IConfiguration configuration)
+    [ApiController]
+    [Route("api/animals")]
+    public class AnimalsController : ControllerBase
     {
-        _configuration = configuration;
-    }
-    
-    [HttpGet]
-    public IActionResult GetAnimals()
-    {
-        // Open connection
-        using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
-        connection.Open();
-        
-        // Create command
-        using SqlCommand command = new SqlCommand();
-        command.Connection = connection;
-        command.CommandText = "SELECT * FROM Animal;";
-        
-        // Execute command
-        var reader = command.ExecuteReader();
+        private const string ConnString = "Data Source=db-mssql;Initial Catalog=2019SBD;Integrated Security=True;Trust Server Certificate=True;";
 
-        var animals = new List<Animal>();
-
-        int idAnimalOrdinal = reader.GetOrdinal("IdAnimal");
-        int nameOrdinal = reader.GetOrdinal("Name");
-
-        while (reader.Read())
+        [HttpGet]
+        public IActionResult GetAnimals([FromQuery] string orderBy = "name")
         {
-            animals.Add(new Animal()
+            var validSortByValues = new HashSet<string> {"name", "description", "category", "area"};
+            orderBy = validSortByValues.Contains(orderBy.ToLower()) ? orderBy : "name";
+
+            var animals = new List<Animal>();
+            try
             {
-                IdAnimal = reader.GetInt32(idAnimalOrdinal),
-                Name = reader.GetString(nameOrdinal)
-            });
+                using (var conn = new SqlConnection(ConnString))
+                {
+                    conn.Open();
+                    using (var cmd = new SqlCommand($"SELECT * FROM Animal ORDER BY {orderBy}", conn))
+                    {
+                        using (var dr = cmd.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                animals.Add(new Animal
+                                {
+                                    IdAnimal = (int)dr["IdAnimal"],
+                                    Name = dr["Name"].ToString(),
+                                    Description = dr["Description"].ToString(),
+                                    Category = dr["Category"].ToString(),
+                                    Area = dr["Area"].ToString()
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch (SqlException e)
+            {
+                return StatusCode(500, "Error accessing the database: " + e.Message + e.StackTrace);
+            }
+            return Ok(animals);
         }
 
-        //var animals = _animalRepository.GetAnimals();
-        
-        return Ok(animals);
-    }
+        [HttpPost]
+        public IActionResult AddAnimal(string name, string description, string category, string area)
+        {
+            try
+            {
+                using (var conn = new SqlConnection(ConnString))
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand("INSERT INTO Animal (Name, Description, Category, Area) VALUES (@name, @desc, @cat, @area)", conn);
+                    cmd.Parameters.AddWithValue("@name", name);
+                    cmd.Parameters.AddWithValue("@desc", description);
+                    cmd.Parameters.AddWithValue("@cat", category);
+                    cmd.Parameters.AddWithValue("@area", area);
+                    cmd.ExecuteNonQuery();
+                }
+                return StatusCode(201); // Created
+            }
+            catch (SqlException e)
+            {
+                return StatusCode(500, "Error adding the animal to the database: " + e.Message);
+            }
+        }
 
+        [HttpPut("{idAnimal}")]
+        public IActionResult UpdateAnimal(int idAnimal, Animal animal)
+        {
+            try
+            {
+                using (var conn = new SqlConnection(ConnString))
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand("UPDATE Animal SET Name = @name, Description = @desc, Category = @cat, Area = @area WHERE IdAnimal = @id", conn);
+                    cmd.Parameters.AddWithValue("@name", animal.Name);
+                    cmd.Parameters.AddWithValue("@desc", animal.Description);
+                    cmd.Parameters.AddWithValue("@cat", animal.Category);
+                    cmd.Parameters.AddWithValue("@area", animal.Area);
+                    cmd.ExecuteNonQuery();
+                }
+                return NoContent(); // 204 No Content
+            }
+            catch (SqlException e)
+            {
+                return StatusCode(500, "Error updating the animal in the database: " + e.Message);
+            }
+        }
 
-    [HttpPost]
-    public IActionResult AddAnimal(AddAnimal animal)
-    {
-        // Open connection
-        using SqlConnection connection = new SqlConnection(_configuration.GetConnectionString("Default"));
-        connection.Open();
-        
-        // Create command
-        using SqlCommand command = new SqlCommand();
-        command.Connection = connection;
-        command.CommandText = "INSERT INTO Animal VALUES (@animalName,'','','')";
-        command.Parameters.AddWithValue("@animalName", animal.Name);
-        
-        // Execute command
-        command.ExecuteNonQuery();
-
-        return Created("", null);
+        [HttpDelete("{idAnimal}")]
+        public IActionResult DeleteAnimal(int idAnimal)
+        {
+            try
+            {
+                using (var conn = new SqlConnection(ConnString))
+                {
+                    conn.Open();
+                    var cmd = new SqlCommand("DELETE FROM Animal WHERE IdAnimal = @id", conn);
+                    cmd.Parameters.AddWithValue("@id", idAnimal);
+                    cmd.ExecuteNonQuery();
+                }
+                return NoContent(); // 204 No Content
+            }
+            catch (SqlException e)
+            {
+                return StatusCode(500, "Error deleting the animal from the database: " + e.Message);
+            }
+        }
     }
 }
