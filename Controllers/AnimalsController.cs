@@ -50,7 +50,7 @@ namespace Tutorial5.Controllers
         }
 
         [HttpPost]
-        public IActionResult AddAnimal(string name, string description, string category, string area)
+        public IActionResult AddAnimal(Animal animal)
         {
             try
             {
@@ -58,10 +58,10 @@ namespace Tutorial5.Controllers
                 {
                     conn.Open();
                     var cmd = new SqlCommand("INSERT INTO Animal (Name, Description, Category, Area) VALUES (@name, @desc, @cat, @area)", conn);
-                    cmd.Parameters.AddWithValue("@name", name);
-                    cmd.Parameters.AddWithValue("@desc", description);
-                    cmd.Parameters.AddWithValue("@cat", category);
-                    cmd.Parameters.AddWithValue("@area", area);
+                    cmd.Parameters.AddWithValue("@name", animal.Name);
+                    cmd.Parameters.AddWithValue("@desc", animal.Description);
+                    cmd.Parameters.AddWithValue("@cat", animal.Category);
+                    cmd.Parameters.AddWithValue("@area", animal.Area);
                     cmd.ExecuteNonQuery();
                 }
                 return StatusCode(201); // Created
